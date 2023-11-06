@@ -6,8 +6,8 @@
 //! - [Waveshare C driver](https://github.com/waveshare/e-Paper/blob/master/RaspberryPi_JetsonNano/c/lib/e-Paper/EPD_5in83_V2.c)
 //! - [Waveshare Python driver](https://github.com/waveshare/e-Paper/blob/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epd5in83_V2.py)
 
-use embedded_hal::digital::{InputPin, OutputPin, ErrorType};
-use embedded_hal_async::{delay::DelayNs, spi::SpiDevice, digital::Wait};
+use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
 use crate::color::Color;
 use crate::interface::DisplayInterface;
@@ -40,25 +40,26 @@ const SINGLE_BYTE_WRITE: bool = true;
 
 /// Epd5in83 driver
 ///
-pub struct Epd5in83<SPI, BUSY, DC, RST, DELAY> {
+pub struct Epd7in5<SPI, BUSY, DC, RST> {
     /// Connection Interface
-    interface: DisplayInterface<SPI, BUSY, DC, RST, DELAY, SINGLE_BYTE_WRITE>,
+    interface: DisplayInterface<SPI, BUSY, DC, RST, SINGLE_BYTE_WRITE>,
     /// Background Color
     color: Color,
 }
 
-impl<SPI, BUSY, DC, RST, DELAY> InternalWiAdditions<SPI, BUSY, DC, RST, DELAY>
-    for Epd5in83<SPI, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST>
+    for Epd7in5<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     BUSY: InputPin + Wait,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayNs,
 {
-    async fn init(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+    async fn init(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+        defmt::info!("initializing Epd7in5");
+
         // Reset the device
-        self.interface.reset(delay, 2000, 50).await;
+        self.interface.reset(spi, 2000, 50).await;
 
         // Set the power settings: VGH=20V,VGL=-20V,VDH=15V,VDL=-15V
         self.cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x07, 0x3F, 0x3F]).await?;
@@ -66,7 +67,7 @@ where
         // Power on
         self.command(spi, Command::PowerOn).await?;
         //delay.delay_us(5000);
-        self.wait_until_idle(spi, delay).await?;
+        self.wait_until_idle(spi).await?;
 
         // Set the panel settings: BWOTP
         self.cmd_with_data(spi, Command::PanelSetting, &[0x1F]).await?;
@@ -83,19 +84,18 @@ where
         // Set S2G and G2S non-overlap periods to 12 (default)
         self.cmd_with_data(spi, Command::TconSetting, &[0x22]).await?;
 
-        self.wait_until_idle(spi, delay).await?;
+        self.wait_until_idle(spi).await?;
         Ok(())
     }
 }
 
-impl<SPI, BUSY, DC, RST, DELAY> WaveshareDisplay<SPI, BUSY, DC, RST, DELAY>
-    for Epd5in83<SPI, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
+    for Epd7in5<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     BUSY: InputPin + Wait,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayNs,
 {
     type DisplayColor = Color;
     async fn new(
@@ -103,7 +103,6 @@ where
         busy: BUSY,
         dc: DC,
         rst: RST,
-        delay: &mut DELAY,
         delay_us: Option<u32>,
     ) -> Result<Self, SPI::Error> {
         let interface = DisplayInterface::new(busy, dc, rst, delay_us);
@@ -111,21 +110,21 @@ where
 
         let mut epd = Epd5in83 { interface, color };
 
-        epd.init(spi, delay).await?;
+        epd.init(spi).await?;
 
         Ok(epd)
     }
 
     async fn sleep(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
-        self.wait_until_idle(spi, delay).await?;
+        self.wait_until_idle(spi).await?;
         self.command(spi, Command::PowerOff).await?;
-        self.wait_until_idle(spi, delay).await?;
+        self.wait_until_idle(spi).await?;
         self.cmd_with_data(spi, Command::DeepSleep, &[0xA5]).await?;
         Ok(())
     }
 
     async fn wake_up(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
-        self.init(spi, delay).await
+        self.init(spi).await
     }
 
     fn set_background_color(&mut self, color: Color) {
@@ -148,9 +147,8 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-        delay: &mut DELAY,
     ) -> Result<(), SPI::Error> {
-        self.wait_until_idle(spi, delay)?;
+        self.wait_until_idle(spi)?;
         let color_value = self.color.get_byte_value();
 
         self.interface.cmd(spi, Command::DataStartTransmission1).await?;
@@ -164,8 +162,7 @@ where
 
     async fn update_partial_frame(
         &mut self,
-        _spi: &mut SPI,
-        _delay: &mut DELAY,
+        spi: &mut SPI,
         _buffer: &[u8],
         _x: u32,
         _y: u32,
@@ -177,7 +174,7 @@ where
 
     async fn display_frame(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
         self.command(spi, Command::DisplayRefresh).await?;
-        self.wait_until_idle(spi, delay).await?;
+        self.wait_until_idle(spi).await?;
         Ok(())
     }
 
@@ -185,15 +182,14 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-        delay: &mut DELAY,
     ) -> Result<(), SPI::Error> {
-        self.update_frame(spi, buffer, delay).await?;
-        self.display_frame(spi, delay).await?;
+        self.update_frame(spi, buffer).await?;
+        self.display_frame(spi).await?;
         Ok(())
     }
 
     async fn clear_frame(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
-        self.wait_until_idle(spi, delay).await?;
+        self.wait_until_idle(spi).await?;
 
         self.command(spi, Command::DataStartTransmission1).await?;
         self.interface.data_x_times(spi, 0xFF, NUM_DISPLAY_BITS).await?;
@@ -206,8 +202,7 @@ where
 
     async fn set_lut(
         &mut self,
-        _spi: &mut SPI,
-        _delay: &mut DELAY,
+        spi: &mut SPI,
         _refresh_rate: Option<RefreshLut>,
     ) -> Result<(), SPI::Error> {
         unimplemented!();
@@ -225,7 +220,6 @@ where
     BUSY: InputPin + Wait,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayNs,
 {
     async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), SPI::Error> {
         self.interface.cmd(spi, command).await
