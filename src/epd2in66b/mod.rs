@@ -244,37 +244,37 @@ where
     RST: OutputPin,
     DELAY: DelayNs,
 {
-    fn update_color_frame(
+    async fn update_color_frame(
         &mut self,
         spi: &mut SPI,
         delay: &mut DELAY,
         black: &[u8],
         chromatic: &[u8],
     ) -> Result<(), SPI::Error> {
-        self.update_achromatic_frame(spi, delay, black)?;
-        self.update_chromatic_frame(spi, delay, chromatic)
+        self.update_achromatic_frame(spi, delay, black).await?;
+        self.update_chromatic_frame(spi, delay, chromatic).await
     }
 
-    fn update_achromatic_frame(
+    async fn update_achromatic_frame(
         &mut self,
         spi: &mut SPI,
         _delay: &mut DELAY,
         black: &[u8],
     ) -> Result<(), SPI::Error> {
         self.set_cursor(spi, 0, 0)?;
-        self.interface.cmd(spi, Command::WriteBlackWhiteRAM)?;
-        self.interface.data(spi, black)
+        self.interface.cmd(spi, Command::WriteBlackWhiteRAM).await?;
+        self.interface.data(spi, black).await
     }
 
-    fn update_chromatic_frame(
+    async fn update_chromatic_frame(
         &mut self,
         spi: &mut SPI,
         _delay: &mut DELAY,
         chromatic: &[u8],
     ) -> Result<(), SPI::Error> {
-        self.set_cursor(spi, 0, 0)?;
-        self.interface.cmd(spi, Command::WriteRedRAM)?;
-        self.interface.data(spi, chromatic)
+        self.set_cursor(spi, 0, 0).await?;
+        self.interface.cmd(spi, Command::WriteRedRAM).await?;
+        self.interface.data(spi, chromatic).await
     }
 }
 
