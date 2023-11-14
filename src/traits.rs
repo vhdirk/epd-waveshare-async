@@ -1,6 +1,53 @@
 use core::marker::Sized;
+use core::fmt::Debug;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
+
+use crate::error::ErrorKind;
+
+pub trait Error<SPI, BUSY, DC, RST>: core::fmt::Debug
+where
+    SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
+    BUSY: InputPin,
+    BUSY::Error: Copy + Debug,
+    DC: OutputPin,
+    DC::Error: Copy + Debug,
+    RST: OutputPin,
+    RST::Error: Copy + Debug,
+{
+    fn kind(&self) -> ErrorKind<SPI, BUSY, DC, RST>;
+}
+
+impl<SPI, BUSY, DC, RST> Error<SPI, BUSY, DC, RST> for core::convert::Infallible
+where
+    SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
+    BUSY: InputPin,
+    BUSY::Error: Copy + Debug,
+    DC: OutputPin,
+    DC::Error: Copy + Debug,
+    RST: OutputPin,
+    RST::Error: Copy + Debug,
+{
+    fn kind(&self) -> ErrorKind<SPI, BUSY, DC, RST> {
+        match *self {}
+    }
+}
+
+pub trait ErrorType<SPI, BUSY, DC, RST>
+where
+    SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
+    BUSY: InputPin,
+    BUSY::Error: Copy + Debug,
+    DC: OutputPin,
+    DC::Error: Copy + Debug,
+    RST: OutputPin,
+    RST::Error: Copy + Debug,
+{
+    type Error: Error<SPI, BUSY, DC, RST>;
+}
 
 /// All commands need to have this trait which gives the address of the command
 /// which needs to be send via SPI with activated CommandsPin (Data/Command Pin in CommandMode)
@@ -19,12 +66,16 @@ pub enum RefreshLut {
     Quick,
 }
 
-pub(crate) trait InternalWiAdditions<SPI, BUSY, DC, RST>
+pub(crate) trait InternalWiAdditions<SPI, BUSY, DC, RST>: ErrorType<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     /// This initialises the EPD and powers it up
     ///
@@ -36,7 +87,7 @@ where
     /// This function calls [reset](WaveshareDisplay::reset),
     /// so you don't need to call reset your self when trying to wake your device up
     /// after setting it to sleep.
-    async fn init(&mut self, spi: &mut SPI) -> Result<(), SPI::Error>;
+    async fn init(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 }
 
 /// Functions to interact with three color panels
@@ -44,9 +95,13 @@ pub trait WaveshareThreeColorDisplay<SPI, BUSY, DC, RST>:
     WaveshareDisplay<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     /// Transmit data to the SRAM of the EPD
     ///
@@ -56,7 +111,7 @@ where
         spi: &mut SPI,
         black: &[u8],
         chromatic: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Update only the black/white data of the display.
     ///
@@ -65,7 +120,7 @@ where
         &mut self,
         spi: &mut SPI,
         black: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Update only the chromatic data of the display.
     ///
@@ -75,7 +130,7 @@ where
         &mut self,
         spi: &mut SPI,
         chromatic: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 }
 
 /// All the functions to interact with the EPDs
@@ -86,7 +141,7 @@ where
 ///
 ///```rust, no_run
 ///# use embedded_hal_mock::eh1::*;
-///# fn main() -> Result<(), embedded_hal::spi::ErrorKind> {
+///# fn main() -> Result<(), embedded_hal::ErrorKindKind> {
 ///use embedded_graphics::{
 ///    pixelcolor::BinaryColor::On as Black, prelude::*, primitives::{Line, PrimitiveStyle},
 ///};
@@ -121,12 +176,16 @@ where
 ///# Ok(())
 ///# }
 ///```
-pub trait WaveshareDisplay<SPI, BUSY, DC, RST>
+pub trait WaveshareDisplay<SPI, BUSY, DC, RST>: ErrorType<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     /// The Color Type used by the Display
     type DisplayColor;
@@ -143,19 +202,19 @@ where
         dc: DC,
         rst: RST,
         delay_us: Option<u32>,
-    ) -> Result<Self, SPI::Error>
+    ) -> Result<Self, Self::Error>
     where
         Self: Sized;
 
     /// Let the device enter deep-sleep mode to save power.
     ///
     /// The deep sleep mode returns to standby with a hardware reset.
-    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), SPI::Error>;
+    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 
     /// Wakes the device up from sleep
     ///
     /// Also reintialises the device if necessary.
-    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), SPI::Error>;
+    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 
     /// Sets the backgroundcolor for various commands like [clear_frame](WaveshareDisplay::clear_frame)
     fn set_background_color(&mut self, color: Self::DisplayColor);
@@ -174,7 +233,7 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Transmits partial data to the SRAM of the EPD
     ///
@@ -190,24 +249,24 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Displays the frame data from SRAM
     ///
     /// This function waits until the device isn`t busy anymore
-    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), SPI::Error>;
+    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 
     /// Provide a combined update&display and save some time (skipping a busy check in between)
     async fn update_and_display_frame(
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Clears the frame buffer on the EPD with the declared background color
     ///
     /// The background color can be changed with [`WaveshareDisplay::set_background_color`]
-    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), SPI::Error>;
+    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 
     /// Trait for using various Waveforms from different LUTs
     /// E.g. for partial refreshes
@@ -221,13 +280,12 @@ where
         &mut self,
         spi: &mut SPI,
         refresh_rate: Option<RefreshLut>,
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Wait until the display has stopped processing data
     ///
     /// You can call this to make sure a frame is displayed before goin further
-    async fn wait_until_idle(&mut self, spi: &mut SPI)
-        -> Result<(), SPI::Error>;
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 }
 
 /// Allows quick refresh support for displays that support it; lets you send both
@@ -241,7 +299,7 @@ where
 /// Example:
 ///```rust, no_run
 ///# use embedded_hal_mock::eh1::*;
-///# fn main() -> Result<(), embedded_hal::spi::ErrorKind> {
+///# fn main() -> Result<(), embedded_hal::ErrorKindKind> {
 ///# use embedded_graphics::{
 ///#   pixelcolor::BinaryColor::On as Black, prelude::*, primitives::{Line, PrimitiveStyle},
 ///# };
@@ -274,39 +332,40 @@ where
 ///# Ok(())
 ///# }
 ///```
-pub trait QuickRefresh<SPI, BUSY, DC, RST>
+pub trait QuickRefresh<SPI, BUSY, DC, RST>: ErrorType<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy + Debug,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     /// Updates the old frame.
     async fn update_old_frame(
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Updates the new frame.
     async fn update_new_frame(
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Displays the new frame
-    async fn display_new_frame(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), SPI::Error>;
+    async fn display_new_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;
 
     /// Updates and displays the new frame.
     async fn update_and_display_new_frame(
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Updates the old frame for a portion of the display.
     #[allow(clippy::too_many_arguments)]
@@ -318,7 +377,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Updates the new frame for a portion of the display.
     #[allow(clippy::too_many_arguments)]
@@ -330,7 +389,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Clears the partial frame buffer on the EPD with the declared background color
     /// The background color can be changed with [`WaveshareDisplay::set_background_color`]
@@ -341,5 +400,5 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error>;
+    ) -> Result<(), Self::Error>;
 }

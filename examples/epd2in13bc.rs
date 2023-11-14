@@ -7,7 +7,7 @@ use embedded_graphics::{
     text::{Baseline, Text, TextStyleBuilder},
 };
 use embedded_hal::delay::DelayNs;
-use epd_waveshare::{
+use epd_waveshare_async::{
     color::*,
     epd2in13bc::{Display2in13bc, Epd2in13bc},
     graphics::DisplayRotation,
@@ -72,7 +72,7 @@ fn main() -> Result<(), SPIError> {
     let mut delay = Delay {};
 
     let mut epd2in13 =
-        Epd2in13bc::new(&mut spi, busy, dc, rst, &mut delay, None).expect("eink initalize error");
+        Epd2in13bc::new(&mut spi, busy, dc, rst, None).expect("eink initalize error");
 
     println!("Test all the rotations");
     let mut display = Display2in13bc::default();

@@ -62,13 +62,13 @@
 //!
 #![no_std]
 #![deny(missing_docs)]
-#![allow(stable_features)]
-#![cfg_attr(feature = "async", feature(async_fn_in_trait, impl_trait_projections))]
-#![cfg_attr(feature = "async", allow(incomplete_features, async_fn_in_trait))]
+#![allow(stable_features, incomplete_features, async_fn_in_trait)]
+#![feature(async_fn_in_trait, impl_trait_projections)]
 
 #[cfg(feature = "graphics")]
 pub mod graphics;
 
+mod error;
 mod traits;
 
 pub mod color;
@@ -102,12 +102,15 @@ pub use epd7in5b_v2 as epd7in5b_v3;
 
 pub(crate) mod type_a;
 
+
 /// Includes everything important besides the chosen Display
 pub mod prelude {
     pub use crate::color::{Color, OctColor, TriColor};
     pub use crate::traits::{
         QuickRefresh, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay,
     };
+
+    pub use crate::error::*;
 
     pub use crate::SPI_MODE;
 

@@ -1,13 +1,14 @@
 //! A simple Driver for the Waveshare 2.7" B Tri-Color E-Ink Display via SPI
 //!
 //! [Documentation](https://www.waveshare.com/wiki/2.7inch_e-Paper_HAT_(B))
-
+use core::fmt::Debug;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
+use crate::error::ErrorKind;
 use crate::interface::DisplayInterface;
 use crate::traits::{
-    InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay,
+    InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay, ErrorType,
 };
 
 // The Lookup Tables for the Display
@@ -48,21 +49,38 @@ pub struct Epd2in7b<SPI, BUSY, DC, RST> {
     color: Color,
 }
 
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in7b<SPI, BUSY, DC, RST>where
+    SPI: SpiDevice,
+    SPI::Error: Copy,
+    BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
+    DC: OutputPin,
+    DC::Error: Copy + Debug,
+    RST: OutputPin,
+    RST::Error: Copy + Debug,
+{
+    type Error = ErrorKind<SPI, BUSY, DC, RST>;
+}
+
 impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST>
     for Epd2in7b<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
-    async fn init(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn init(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         // reset the device
-        self.interface.reset(spi, 10_000, 2_000).await;
+        self.interface.reset(spi, 10_000, 2_000).await?;
 
         // power on
         self.command(spi, Command::PowerOn).await?;
-        self.interface.delay(spi, 5000).await;
+        self.interface.delay(spi, 5000).await?;
         self.wait_until_idle(spi).await?;
 
         // set panel settings, 0xbf is bw, 0xaf is multi-color
@@ -125,9 +143,13 @@ impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
     for Epd2in7b<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     type DisplayColor = Color;
     async fn new(
@@ -136,7 +158,7 @@ where
         dc: DC,
         rst: RST,
         delay_us: Option<u32>,
-    ) -> Result<Self, SPI::Error> {
+    ) -> Result<Self, Self::Error> {
         let interface = DisplayInterface::new(busy, dc, rst, delay_us);
         let color = DEFAULT_BACKGROUND_COLOR;
 
@@ -147,11 +169,11 @@ where
         Ok(epd)
     }
 
-    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.init(spi).await
     }
 
-    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.interface
             .cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0xf7])
@@ -168,7 +190,7 @@ where
     async fn update_frame(
         &mut self,
         spi: &mut SPI,
-        buffer: &[u8]    ) -> Result<(), SPI::Error> {
+        buffer: &[u8]    ) -> Result<(), Self::Error> {
         self.interface
             .cmd(spi, Command::DataStartTransmission1)
             .await?;
@@ -190,7 +212,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.interface
             .cmd(spi, Command::PartialDataStartTransmission1)
             .await?;
@@ -210,7 +232,7 @@ where
         self.interface.cmd(spi, Command::DataStop).await
     }
 
-    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.command(spi, Command::DisplayRefresh).await?;
         self.wait_until_idle(spi).await?;
         Ok(())
@@ -220,13 +242,13 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.update_frame(spi, buffer).await?;
         self.command(spi, Command::DisplayRefresh).await?;
         Ok(())
     }
 
-    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
 
         let color_value = self.color.get_byte_value();
@@ -262,7 +284,7 @@ where
         &mut self,
         spi: &mut SPI,
         _refresh_rate: Option<RefreshLut>,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.cmd_with_data(spi, Command::LutForVcom, &LUT_VCOM_DC)
             .await?;
@@ -280,9 +302,8 @@ where
     async fn wait_until_idle(
         &mut self,
         spi: &mut SPI,
-    ) -> Result<(), SPI::Error> {
-        self.interface.wait_until_idle(spi, IS_BUSY_LOW).await;
-        Ok(())
+    ) -> Result<(), Self::Error> {
+        self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }
 
@@ -290,16 +311,20 @@ impl<SPI, BUSY, DC, RST> WaveshareThreeColorDisplay<SPI, BUSY, DC, RST>
     for Epd2in7b<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     async fn update_color_frame(
         &mut self,
         spi: &mut SPI,
         black: &[u8],
         chromatic: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.update_achromatic_frame(spi, black).await?;
         self.update_chromatic_frame(spi, chromatic).await
     }
@@ -311,7 +336,7 @@ where
         &mut self,
         spi: &mut SPI,
         achromatic: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.interface
             .cmd(spi, Command::DataStartTransmission1)
             .await?;
@@ -328,7 +353,7 @@ where
         &mut self,
         spi: &mut SPI,
         chromatic: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.interface
             .cmd(spi, Command::DataStartTransmission2)
             .await?;
@@ -345,19 +370,23 @@ where
 impl<SPI, BUSY, DC, RST> Epd2in7b<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
-    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), SPI::Error> {
+    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd(spi, command).await
     }
 
-    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), SPI::Error> {
+    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.data(spi, data).await
     }
 
-    async fn send_buffer_helper(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), SPI::Error> {
+    async fn send_buffer_helper(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         // Based on the waveshare implementation, all data for color values is flipped. This helper
         // method makes that transmission easier
         for b in buffer.iter() {
@@ -371,7 +400,7 @@ where
         spi: &mut SPI,
         command: Command,
         data: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd_with_data(spi, command, data).await
     }
 
@@ -383,7 +412,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.command(spi, Command::PartialDisplayRefresh).await?;
         self.send_data(spi, &[(x >> 8) as u8]).await?;
         self.send_data(spi, &[(x & 0xf8) as u8]).await?;
@@ -407,7 +436,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface
             .cmd(spi, Command::PartialDataStartTransmission1)
             .await?;
@@ -439,7 +468,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface
             .cmd(spi, Command::PartialDataStartTransmission2)
             .await?;

@@ -48,12 +48,13 @@
 //!
 //!
 //! BE CAREFUL! The screen can get ghosting/burn-ins through the Partial Fast Update Drawing.
-
+use core::fmt::Debug;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
 use crate::interface::DisplayInterface;
-use crate::traits::{InternalWiAdditions, QuickRefresh, RefreshLut, WaveshareDisplay};
+use crate::error::ErrorKind;
+use crate::traits::{InternalWiAdditions, QuickRefresh, RefreshLut, WaveshareDisplay, ErrorType};
 
 //The Lookup Tables for the Display
 mod constants;
@@ -95,17 +96,34 @@ pub struct Epd4in2<SPI, BUSY, DC, RST> {
     refresh: RefreshLut,
 }
 
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd4in2<SPI, BUSY, DC, RST>where
+    SPI: SpiDevice,
+    SPI::Error: Copy,
+    BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
+    DC: OutputPin,
+    DC::Error: Copy + Debug,
+    RST: OutputPin,
+    RST::Error: Copy + Debug,
+{
+    type Error = ErrorKind<SPI, BUSY, DC, RST>;
+}
+
 impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST>
     for Epd4in2<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
-    async fn init(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn init(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         // reset the device
-        self.interface.reset(spi, 10_000, 10_000).await;
+        self.interface.reset(spi, 10_000, 10_000).await?;
 
         // set the power settings
         self.interface
@@ -119,7 +137,7 @@ where
 
         // power on
         self.command(spi, Command::PowerOn).await?;
-        self.interface.delay(spi, 5000).await;
+        self.interface.delay(spi, 5000).await?;
         self.wait_until_idle(spi).await?;
 
         // set the panel settings
@@ -155,9 +173,13 @@ impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
     for Epd4in2<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     type DisplayColor = Color;
     async fn new(
@@ -166,7 +188,7 @@ where
         dc: DC,
         rst: RST,
         delay_us: Option<u32>,
-    ) -> Result<Self, SPI::Error> {
+    ) -> Result<Self, Self::Error> {
         let interface = DisplayInterface::new(busy, dc, rst, delay_us);
         let color = DEFAULT_BACKGROUND_COLOR;
 
@@ -181,7 +203,7 @@ where
         Ok(epd)
     }
 
-    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.interface
             .cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x17])
@@ -202,7 +224,7 @@ where
         Ok(())
     }
 
-    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.init(spi).await
     }
 
@@ -226,7 +248,7 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         let color_value = self.color.get_byte_value();
 
@@ -251,7 +273,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         if buffer.len() as u32 != width / 8 * height {
             //TODO: panic!! or sth like that
@@ -290,7 +312,7 @@ where
         Ok(())
     }
 
-    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.command(spi, Command::DisplayRefresh).await?;
         Ok(())
@@ -300,13 +322,13 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.update_frame(spi, buffer).await?;
         self.command(spi, Command::DisplayRefresh).await?;
         Ok(())
     }
 
-    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.send_resolution(spi).await?;
 
@@ -332,7 +354,7 @@ where
         &mut self,
         spi: &mut SPI,
         refresh_rate: Option<RefreshLut>,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         if let Some(refresh_lut) = refresh_rate {
             self.refresh = refresh_lut;
         }
@@ -358,24 +380,27 @@ where
     async fn wait_until_idle(
         &mut self,
         spi: &mut SPI,
-    ) -> Result<(), SPI::Error> {
-        self.interface.wait_until_idle(spi, IS_BUSY_LOW).await;
-        Ok(())
+    ) -> Result<(), Self::Error> {
+        self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }
 
 impl<SPI, BUSY, DC, RST> Epd4in2<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
-    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), SPI::Error> {
+    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd(spi, command).await
     }
 
-    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), SPI::Error> {
+    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.data(spi, data).await
     }
 
@@ -384,11 +409,11 @@ where
         spi: &mut SPI,
         command: Command,
         data: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd_with_data(spi, command, data).await
     }
 
-    async fn send_resolution(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn send_resolution(&mut self, spi: &mut SPI) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         let w = self.width();
         let h = self.height();
 
@@ -408,7 +433,7 @@ where
         lut_bw: &[u8],
         lut_wb: &[u8],
         lut_bb: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.wait_until_idle(spi).await?;
         // LUT VCOM
         self.cmd_with_data(spi, Command::LutForVcom, lut_vcom)
@@ -441,7 +466,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.send_data(spi, &[(x >> 8) as u8]).await?;
         let tmp = x & 0xf8;
         self.send_data(spi, &[tmp as u8]).await?; // x should be the multiple of 8, the last 3 bit will always be ignored
@@ -466,16 +491,20 @@ impl<SPI, BUSY, DC, RST> QuickRefresh<SPI, BUSY, DC, RST>
     for Epd4in2<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     /// To be followed immediately after by `update_old_frame`.
     async fn update_old_frame(
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
 
         self.interface
@@ -492,7 +521,7 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         // self.send_resolution(spi).await?;
 
@@ -510,7 +539,7 @@ where
     async fn display_new_frame(
         &mut self,
         spi: &mut SPI,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.display_frame(spi).await
     }
 
@@ -522,7 +551,7 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.update_new_frame(spi, buffer).await?;
         self.display_frame(spi).await
     }
@@ -535,7 +564,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
 
         if buffer.len() as u32 != width / 8 * height {
@@ -567,7 +596,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         if buffer.len() as u32 != width / 8 * height {
             //TODO: panic!! or sth like that
@@ -593,7 +622,7 @@ where
         y: u32,
         width: u32,
         height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.send_resolution(spi).await?;
 

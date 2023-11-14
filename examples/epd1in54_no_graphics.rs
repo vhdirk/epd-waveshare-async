@@ -58,14 +58,14 @@ fn main() -> Result<(), SPIError> {
 
     // Setup of the needed pins is finished here
     // Now the "real" usage of the eink-waveshare-rs crate begins
-    let mut epd = Epd1in54::new(&mut spi, busy, dc, rst, &mut delay, Some(5)).await?;
+    let mut epd = Epd1in54::new(&mut spi, busy, dc, rst, Some(5)).await?;
 
     // Clear the full screen
     epd.clear_frame(&mut spi, &mut delay).await?;
     epd.display_frame(&mut spi, &mut delay).await?;
 
     // Speeddemo
-    epd.set_lut(&mut spi, &mut delay, Some(RefreshLut::Quick))?;
+    epd.set_lut(&mut spi, &mut delay, Some(RefreshLut::Quick)).await?;
     let small_buffer = [Color::Black.get_byte_value(); 32]; //16x16
     let number_of_runs = 1;
     for i in 0..number_of_runs {
@@ -78,30 +78,30 @@ fn main() -> Result<(), SPIError> {
             25 + offset,
             16,
             16,
-        )?;
-        epd.display_frame(&mut spi, &mut delay)?;
+        ).await?;
+        epd.display_frame(&mut spi, &mut delay).await?;
     }
 
     // Clear the full screen
-    epd.clear_frame(&mut spi, &mut delay)?;
-    epd.display_frame(&mut spi, &mut delay)?;
+    epd.clear_frame(&mut spi, &mut delay).await?;
+    epd.display_frame(&mut spi, &mut delay).await?;
 
     // Draw some squares
     let small_buffer = [Color::Black.get_byte_value(); 3200]; //160x160
-    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 20, 20, 160, 160)?;
+    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 20, 20, 160, 160).await?;
 
     let small_buffer = [Color::White.get_byte_value(); 800]; //80x80
-    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 60, 60, 80, 80)?;
+    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 60, 60, 80, 80).await?;
 
     let small_buffer = [Color::Black.get_byte_value(); 8]; //8x8
-    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 96, 96, 8, 8)?;
+    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 96, 96, 8, 8).await?;
 
     // Display updated frame
-    epd.display_frame(&mut spi, &mut delay)?;
+    epd.display_frame(&mut spi, &mut delay).await?;
     delay.delay_ms(5000);
 
     // Set the EPD to sleep
-    epd.sleep(&mut spi, &mut delay)?;
+    epd.sleep(&mut spi, &mut delay).await?;
 
     Ok(())
 }
