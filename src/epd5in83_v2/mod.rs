@@ -6,13 +6,15 @@
 //! - [Waveshare C driver](https://github.com/waveshare/e-Paper/blob/master/RaspberryPi_JetsonNano/c/lib/e-Paper/EPD_5in83_V2.c)
 //! - [Waveshare Python driver](https://github.com/waveshare/e-Paper/blob/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epd5in83_V2.py)
 
+use core::fmt::Debug;
+
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
 use crate::color::Color;
 use crate::interface::DisplayInterface;
-use crate::prelude::WaveshareDisplay;
-use crate::traits::{InternalWiAdditions, RefreshLut};
+use crate::prelude::{ErrorKind, WaveshareDisplay};
+use crate::traits::{ErrorType, InternalWiAdditions, RefreshLut};
 
 pub(crate) mod command;
 use self::command::Command;
@@ -40,37 +42,54 @@ const SINGLE_BYTE_WRITE: bool = true;
 
 /// Epd5in83 driver
 ///
-pub struct Epd7in5<SPI, BUSY, DC, RST> {
+pub struct Epd5in83<SPI, BUSY, DC, RST> {
     /// Connection Interface
     interface: DisplayInterface<SPI, BUSY, DC, RST, SINGLE_BYTE_WRITE>,
     /// Background Color
     color: Color,
 }
 
-impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST>
-    for Epd7in5<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd5in83<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
-    async fn init(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
-        defmt::info!("initializing Epd7in5");
+    type Error = ErrorKind<SPI, BUSY, DC, RST>;
+}
 
+impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST> for Epd5in83<SPI, BUSY, DC, RST>
+where
+    SPI: SpiDevice,
+    SPI::Error: Copy,
+    BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
+    DC: OutputPin,
+    DC::Error: Copy + Debug,
+    RST: OutputPin,
+    RST::Error: Copy + Debug,
+{
+    async fn init(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         // Reset the device
-        self.interface.reset(spi, 2000, 50).await;
+        self.interface.reset(spi, 2000, 50).await?;
 
         // Set the power settings: VGH=20V,VGL=-20V,VDH=15V,VDL=-15V
-        self.cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x07, 0x3F, 0x3F]).await?;
+        self.cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x07, 0x3F, 0x3F])
+            .await?;
 
         // Power on
         self.command(spi, Command::PowerOn).await?;
-        //delay.delay_us(5000);
+        //self.interface.delay(spi, 5000).await?;
         self.wait_until_idle(spi).await?;
 
         // Set the panel settings: BWOTP
-        self.cmd_with_data(spi, Command::PanelSetting, &[0x1F]).await?;
+        self.cmd_with_data(spi, Command::PanelSetting, &[0x1F])
+            .await?;
 
         // Set the real resolution
         self.send_resolution(spi).await?;
@@ -79,23 +98,28 @@ where
         self.cmd_with_data(spi, Command::DualSPI, &[0x00]).await?;
 
         // Set Vcom and data interval
-        self.cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x10, 0x07]).await?;
+        self.cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x10, 0x07])
+            .await?;
 
         // Set S2G and G2S non-overlap periods to 12 (default)
-        self.cmd_with_data(spi, Command::TconSetting, &[0x22]).await?;
+        self.cmd_with_data(spi, Command::TconSetting, &[0x22])
+            .await?;
 
         self.wait_until_idle(spi).await?;
         Ok(())
     }
 }
 
-impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
-    for Epd7in5<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST> for Epd5in83<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
     type DisplayColor = Color;
     async fn new(
@@ -104,7 +128,7 @@ where
         dc: DC,
         rst: RST,
         delay_us: Option<u32>,
-    ) -> Result<Self, SPI::Error> {
+    ) -> Result<Self, Self::Error> {
         let interface = DisplayInterface::new(busy, dc, rst, delay_us);
         let color = DEFAULT_BACKGROUND_COLOR;
 
@@ -115,7 +139,7 @@ where
         Ok(epd)
     }
 
-    async fn sleep(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+    async fn sleep(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.command(spi, Command::PowerOff).await?;
         self.wait_until_idle(spi).await?;
@@ -123,7 +147,7 @@ where
         Ok(())
     }
 
-    async fn wake_up(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+    async fn wake_up(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.init(spi).await
     }
 
@@ -143,36 +167,36 @@ where
         HEIGHT
     }
 
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
-        self.wait_until_idle(spi)?;
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
+        self.wait_until_idle(spi).await?;
         let color_value = self.color.get_byte_value();
 
-        self.interface.cmd(spi, Command::DataStartTransmission1).await?;
         self.interface
-            .data_x_times(spi, color_value, NUM_DISPLAY_BITS).await?;
+            .cmd(spi, Command::DataStartTransmission1)
+            .await?;
+        self.interface
+            .data_x_times(spi, color_value, WIDTH / 8 * HEIGHT)
+            .await?;
 
         self.interface
-            .cmd_with_data(spi, Command::DataStartTransmission2, buffer)?;
+            .cmd_with_data(spi, Command::DataStartTransmission2, buffer)
+            .await?;
         Ok(())
     }
 
     async fn update_partial_frame(
         &mut self,
-        spi: &mut SPI,
+        _spi: &mut SPI,
         _buffer: &[u8],
         _x: u32,
         _y: u32,
         _width: u32,
         _height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    async fn display_frame(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+    async fn display_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.command(spi, Command::DisplayRefresh).await?;
         self.wait_until_idle(spi).await?;
         Ok(())
@@ -182,50 +206,65 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         self.update_frame(spi, buffer).await?;
         self.display_frame(spi).await?;
         Ok(())
     }
 
-    async fn clear_frame(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+    async fn clear_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
 
         self.command(spi, Command::DataStartTransmission1).await?;
-        self.interface.data_x_times(spi, 0xFF, NUM_DISPLAY_BITS).await?;
+        self.interface
+            .data_x_times(spi, 0xFF, NUM_DISPLAY_BITS)
+            .await?;
 
         self.command(spi, Command::DataStartTransmission2).await?;
-        self.interface.data_x_times(spi, 0x00, NUM_DISPLAY_BITS).await?;
+        self.interface
+            .data_x_times(spi, 0x00, NUM_DISPLAY_BITS)
+            .await?;
 
         Ok(())
     }
 
     async fn set_lut(
         &mut self,
-        spi: &mut SPI,
+        _spi: &mut SPI,
         _refresh_rate: Option<RefreshLut>,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         unimplemented!();
     }
 
-    async fn wait_until_idle(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
-        self.interface.wait_until_idle(spi, IS_BUSY_LOW).await;
-        Ok(())
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
+        self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }
 
-impl<SPI, BUSY, DC, RST, DELAY> Epd5in83<SPI, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST> Epd5in83<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin + Wait,
+    BUSY::Error: Copy + Debug,
     DC: OutputPin,
+    DC::Error: Copy + Debug,
     RST: OutputPin,
+    RST::Error: Copy + Debug,
 {
-    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), SPI::Error> {
+    async fn command(
+        &mut self,
+        spi: &mut SPI,
+        command: Command,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd(spi, command).await
     }
 
-    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), SPI::Error> {
+    async fn send_data(
+        &mut self,
+        spi: &mut SPI,
+        data: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.data(spi, data).await
     }
 
@@ -234,11 +273,14 @@ where
         spi: &mut SPI,
         command: Command,
         data: &[u8],
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd_with_data(spi, command, data).await
     }
 
-    async fn send_resolution(&mut self, spi: &mut SPI) -> Result<(), SPI::Error> {
+    async fn send_resolution(
+        &mut self,
+        spi: &mut SPI,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         let w = self.width();
         let h = self.height();
 

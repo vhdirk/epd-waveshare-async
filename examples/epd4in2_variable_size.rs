@@ -62,8 +62,7 @@ fn main() -> Result<(), SPIError> {
 
     let mut delay = Delay {};
 
-    let mut epd4in2 =
-        Epd4in2::new(&mut spi, busy, dc, rst, None).expect("eink initalize error");
+    let mut epd4in2 = Epd4in2::new(&mut spi, busy, dc, rst, None).expect("eink initalize error");
 
     println!("Test all the rotations");
 

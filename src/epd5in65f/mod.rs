@@ -12,7 +12,7 @@ use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 use crate::color::OctColor;
 use crate::error::ErrorKind;
 use crate::interface::DisplayInterface;
-use crate::traits::{InternalWiAdditions, RefreshLut, WaveshareDisplay, ErrorType};
+use crate::traits::{ErrorType, InternalWiAdditions, RefreshLut, WaveshareDisplay};
 
 pub(crate) mod command;
 use self::command::Command;
@@ -46,8 +46,8 @@ pub struct Epd5in65f<SPI, BUSY, DC, RST> {
     color: OctColor,
 }
 
-
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd5in65f<SPI, BUSY, DC, RST> where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd5in65f<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -232,11 +232,19 @@ where
     RST: OutputPin,
     RST::Error: Copy + Debug,
 {
-    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn command(
+        &mut self,
+        spi: &mut SPI,
+        command: Command,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd(spi, command).await
     }
 
-    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn send_data(
+        &mut self,
+        spi: &mut SPI,
+        data: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.data(spi, data).await
     }
 
@@ -253,7 +261,10 @@ where
         self.interface.wait_until_idle(spi, false).await
     }
 
-    async fn send_resolution(&mut self, spi: &mut SPI) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn send_resolution(
+        &mut self,
+        spi: &mut SPI,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         let w = self.width();
         let h = self.height();
 

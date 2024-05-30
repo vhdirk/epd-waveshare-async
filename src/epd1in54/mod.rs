@@ -57,16 +57,19 @@ use core::fmt::Debug;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
-use crate::{type_a::{
-    command::Command,
-    constants::{LUT_FULL_UPDATE, LUT_PARTIAL_UPDATE},
-}, traits::{InternalWiAdditions, ErrorType}};
+use crate::{
+    traits::{ErrorType, InternalWiAdditions},
+    type_a::{
+        command::Command,
+        constants::{LUT_FULL_UPDATE, LUT_PARTIAL_UPDATE},
+    },
+};
 
+use crate::buffer_len;
 use crate::color::Color;
 use crate::error::ErrorKind;
-use crate::traits::{RefreshLut, WaveshareDisplay};
-use crate::buffer_len;
 use crate::interface::DisplayInterface;
+use crate::traits::{RefreshLut, WaveshareDisplay};
 
 /// Full size buffer for use with the 1in54b EPD
 #[cfg(feature = "graphics")]
@@ -88,7 +91,8 @@ pub struct Epd1in54<SPI, BUSY, DC, RST> {
     refresh: RefreshLut,
 }
 
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd1in54<SPI, BUSY, DC, RST>where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd1in54<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -318,7 +322,10 @@ where
     RST: OutputPin,
     RST::Error: Copy + Debug,
 {
-    pub(crate) async fn use_full_frame(&mut self, spi: &mut SPI) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    pub(crate) async fn use_full_frame(
+        &mut self,
+        spi: &mut SPI,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         // choose full frame/ram
         self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1).await?;
 
@@ -386,7 +393,11 @@ where
             .await
     }
 
-    async fn set_lut_helper(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn set_lut_helper(
+        &mut self,
+        spi: &mut SPI,
+        buffer: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.wait_until_idle(spi).await?;
         assert!(buffer.len() == 30);
 

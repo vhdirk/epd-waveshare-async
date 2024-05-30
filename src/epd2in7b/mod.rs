@@ -8,7 +8,7 @@ use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 use crate::error::ErrorKind;
 use crate::interface::DisplayInterface;
 use crate::traits::{
-    InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay, ErrorType,
+    ErrorType, InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay,
 };
 
 // The Lookup Tables for the Display
@@ -49,7 +49,8 @@ pub struct Epd2in7b<SPI, BUSY, DC, RST> {
     color: Color,
 }
 
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in7b<SPI, BUSY, DC, RST>where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in7b<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -62,8 +63,7 @@ impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in7b<SPI, BUSY, D
     type Error = ErrorKind<SPI, BUSY, DC, RST>;
 }
 
-impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST>
-    for Epd2in7b<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST> for Epd2in7b<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -139,8 +139,7 @@ where
     }
 }
 
-impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
-    for Epd2in7b<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST> for Epd2in7b<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -187,10 +186,7 @@ where
         Ok(())
     }
 
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8]    ) -> Result<(), Self::Error> {
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         self.interface
             .cmd(spi, Command::DataStartTransmission1)
             .await?;
@@ -198,7 +194,8 @@ where
 
         // Clear chromatic layer since we won't be using it here
         self.interface
-            .data_x_times(spi, !self.color.get_byte_value(), WIDTH / 8 * HEIGHT).await?;
+            .data_x_times(spi, !self.color.get_byte_value(), WIDTH / 8 * HEIGHT)
+            .await?;
 
         self.interface.cmd(spi, Command::DataStop).await?;
         Ok(())
@@ -253,13 +250,17 @@ where
 
         let color_value = self.color.get_byte_value();
         self.interface
-            .data_x_times(spi, color_value, WIDTH / 8 * HEIGHT).await?;
+            .data_x_times(spi, color_value, WIDTH / 8 * HEIGHT)
+            .await?;
 
         self.interface.cmd(spi, Command::DataStop).await?;
 
-        self.interface.cmd(spi, Command::DataStartTransmission2).await?;
         self.interface
-            .data_x_times(spi, color_value, WIDTH / 8 * HEIGHT).await?;
+            .cmd(spi, Command::DataStartTransmission2)
+            .await?;
+        self.interface
+            .data_x_times(spi, color_value, WIDTH / 8 * HEIGHT)
+            .await?;
         self.interface.cmd(spi, Command::DataStop).await?;
         Ok(())
     }
@@ -299,10 +300,7 @@ where
         Ok(())
     }
 
-    async fn wait_until_idle(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), Self::Error> {
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }
@@ -378,15 +376,27 @@ where
     RST: OutputPin,
     RST::Error: Copy + Debug,
 {
-    async fn command(&mut self, spi: &mut SPI, command: Command) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn command(
+        &mut self,
+        spi: &mut SPI,
+        command: Command,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.cmd(spi, command).await
     }
 
-    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn send_data(
+        &mut self,
+        spi: &mut SPI,
+        data: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.data(spi, data).await
     }
 
-    async fn send_buffer_helper(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn send_buffer_helper(
+        &mut self,
+        spi: &mut SPI,
+        buffer: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         // Based on the waveshare implementation, all data for color values is flipped. This helper
         // method makes that transmission easier
         for b in buffer.iter() {

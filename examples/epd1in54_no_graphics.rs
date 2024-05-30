@@ -65,7 +65,8 @@ fn main() -> Result<(), SPIError> {
     epd.display_frame(&mut spi, &mut delay).await?;
 
     // Speeddemo
-    epd.set_lut(&mut spi, &mut delay, Some(RefreshLut::Quick)).await?;
+    epd.set_lut(&mut spi, &mut delay, Some(RefreshLut::Quick))
+        .await?;
     let small_buffer = [Color::Black.get_byte_value(); 32]; //16x16
     let number_of_runs = 1;
     for i in 0..number_of_runs {
@@ -78,7 +79,8 @@ fn main() -> Result<(), SPIError> {
             25 + offset,
             16,
             16,
-        ).await?;
+        )
+        .await?;
         epd.display_frame(&mut spi, &mut delay).await?;
     }
 
@@ -88,13 +90,16 @@ fn main() -> Result<(), SPIError> {
 
     // Draw some squares
     let small_buffer = [Color::Black.get_byte_value(); 3200]; //160x160
-    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 20, 20, 160, 160).await?;
+    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 20, 20, 160, 160)
+        .await?;
 
     let small_buffer = [Color::White.get_byte_value(); 800]; //80x80
-    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 60, 60, 80, 80).await?;
+    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 60, 60, 80, 80)
+        .await?;
 
     let small_buffer = [Color::Black.get_byte_value(); 8]; //8x8
-    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 96, 96, 8, 8).await?;
+    epd.update_partial_frame(&mut spi, &mut delay, &small_buffer, 96, 96, 8, 8)
+        .await?;
 
     // Display updated frame
     epd.display_frame(&mut spi, &mut delay).await?;

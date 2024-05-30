@@ -62,8 +62,7 @@ fn main() -> Result<(), SPIError> {
 
     let mut delay = Delay {};
 
-    let mut epd2in13 =
-        Epd2in13::new(&mut spi, busy, dc, rst, None).expect("eink initalize error");
+    let mut epd2in13 = Epd2in13::new(&mut spi, busy, dc, rst, None).expect("eink initalize error");
 
     //println!("Test all the rotations");
     let mut display = Display2in13::default();

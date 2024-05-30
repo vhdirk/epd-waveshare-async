@@ -63,7 +63,7 @@
 #![no_std]
 #![deny(missing_docs)]
 #![allow(stable_features, incomplete_features, async_fn_in_trait)]
-#![feature(async_fn_in_trait, impl_trait_projections)]
+// #![feature(async_fn_in_trait, impl_trait_projections)]
 
 #[cfg(feature = "graphics")]
 pub mod graphics;
@@ -101,7 +101,6 @@ pub mod epd7in5b_v2;
 pub use epd7in5b_v2 as epd7in5b_v3;
 
 pub(crate) mod type_a;
-
 
 /// Includes everything important besides the chosen Display
 pub mod prelude {

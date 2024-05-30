@@ -22,7 +22,7 @@ use crate::epd1in54_v2::constants::{LUT_FULL_UPDATE, LUT_PARTIAL_UPDATE};
 
 use crate::color::Color;
 use crate::error::ErrorKind;
-use crate::traits::{RefreshLut, WaveshareDisplay, ErrorType, InternalWiAdditions};
+use crate::traits::{ErrorType, InternalWiAdditions, RefreshLut, WaveshareDisplay};
 
 use crate::interface::DisplayInterface;
 
@@ -40,7 +40,8 @@ pub struct Epd1in54<SPI, BUSY, DC, RST> {
     refresh: RefreshLut,
 }
 
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd1in54<SPI, BUSY, DC, RST>where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd1in54<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -87,14 +88,15 @@ where
             .cmd_with_data(spi, Command::DataEntryModeSetting, &[0x3])
             .await?;
 
-        self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1)
-            .await?;
+        self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1).await?;
 
-        self.interface.cmd_with_data(
-            spi,
-            Command::TemperatureSensorSelection,
-            &[0x80], // 0x80: internal temperature sensor
-        ).await?;
+        self.interface
+            .cmd_with_data(
+                spi,
+                Command::TemperatureSensorSelection,
+                &[0x80], // 0x80: internal temperature sensor
+            )
+            .await?;
 
         self.interface
             .cmd_with_data(spi, Command::BorderWaveformControl, &[0x1])
@@ -115,14 +117,13 @@ where
         //Initialize the lookup table with a refresh waveform
         self.set_lut(spi, None).await?;
 
-        self.set_ram_counter(spi, delay, 0, 0).await?;
+        self.set_ram_counter(spi, 0, 0).await?;
 
         self.wait_until_idle(spi).await
     }
 }
 
-impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
-    for Epd1in54<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST> for Epd1in54<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -173,11 +174,7 @@ where
             .await
     }
 
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error> {
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.use_full_frame(spi).await?;
         self.interface
@@ -196,8 +193,7 @@ where
         height: u32,
     ) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
-        self.set_ram_area(spi, x, y, x + width, y + height)
-            .await?;
+        self.set_ram_area(spi, x, y, x + width, y + height).await?;
         self.set_ram_counter(spi, x, y).await?;
 
         self.interface
@@ -293,10 +289,7 @@ where
         Ok(())
     }
 
-    async fn wait_until_idle(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), Self::Error> {
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }
@@ -317,8 +310,7 @@ where
         spi: &mut SPI,
     ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         // choose full frame/ram
-        self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1)
-            .await?;
+        self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1).await?;
 
         // start from the beginning
         self.set_ram_counter(spi, 0, 0).await

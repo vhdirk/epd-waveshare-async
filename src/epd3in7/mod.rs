@@ -16,7 +16,7 @@ use crate::buffer_len;
 use crate::color::Color;
 use crate::error::ErrorKind;
 use crate::interface::DisplayInterface;
-use crate::traits::{InternalWiAdditions, RefreshLut, WaveshareDisplay, ErrorType};
+use crate::traits::{ErrorType, InternalWiAdditions, RefreshLut, WaveshareDisplay};
 
 /// Width of the display.
 pub const WIDTH: u32 = 280;
@@ -41,7 +41,6 @@ pub type Display3in7 = crate::graphics::Display<
     Color,
 >;
 
-
 /// Epd3in7 driver
 pub struct Epd3in7<SPI, BUSY, DC, RST> {
     /// Connection Interface
@@ -50,7 +49,8 @@ pub struct Epd3in7<SPI, BUSY, DC, RST> {
     background_color: Color,
 }
 
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd3in7<SPI, BUSY, DC, RST>where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd3in7<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -63,8 +63,7 @@ impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd3in7<SPI, BUSY, DC
     type Error = ErrorKind<SPI, BUSY, DC, RST>;
 }
 
-impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST>
-    for Epd3in7<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> InternalWiAdditions<SPI, BUSY, DC, RST> for Epd3in7<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -156,8 +155,7 @@ where
     }
 }
 
-impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
-    for Epd3in7<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST> for Epd3in7<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -216,11 +214,7 @@ where
         HEIGHT
     }
 
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error> {
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         assert!(buffer.len() == buffer_len(WIDTH as usize, HEIGHT as usize));
         self.interface
             .cmd_with_data(spi, Command::SetRamXAddressCounter, &[0x00, 0x00])
@@ -295,10 +289,7 @@ where
             .await
     }
 
-    async fn wait_until_idle(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), Self::Error> {
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }

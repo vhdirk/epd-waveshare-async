@@ -1,5 +1,5 @@
-use core::marker::Sized;
 use core::fmt::Debug;
+use core::marker::Sized;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
@@ -66,7 +66,8 @@ pub enum RefreshLut {
     Quick,
 }
 
-pub(crate) trait InternalWiAdditions<SPI, BUSY, DC, RST>: ErrorType<SPI, BUSY, DC, RST>
+pub(crate) trait InternalWiAdditions<SPI, BUSY, DC, RST>:
+    ErrorType<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy + Debug,
@@ -141,7 +142,7 @@ where
 ///
 ///```rust, no_run
 ///# use embedded_hal_mock::eh1::*;
-///# fn main() -> Result<(), embedded_hal::ErrorKindKind> {
+///# fn main() -> Result<(), embedded_hal::ErrorKind> {
 ///use embedded_graphics::{
 ///    pixelcolor::BinaryColor::On as Black, prelude::*, primitives::{Line, PrimitiveStyle},
 ///};
@@ -229,11 +230,7 @@ where
     fn height(&self) -> u32;
 
     /// Transmit a full frame to the SRAM of the EPD
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error>;
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error>;
 
     /// Transmits partial data to the SRAM of the EPD
     ///
@@ -299,7 +296,7 @@ where
 /// Example:
 ///```rust, no_run
 ///# use embedded_hal_mock::eh1::*;
-///# fn main() -> Result<(), embedded_hal::ErrorKindKind> {
+///# fn main() -> Result<(), embedded_hal::ErrorKind> {
 ///# use embedded_graphics::{
 ///#   pixelcolor::BinaryColor::On as Black, prelude::*, primitives::{Line, PrimitiveStyle},
 ///# };
@@ -344,18 +341,10 @@ where
     RST::Error: Copy + Debug,
 {
     /// Updates the old frame.
-    async fn update_old_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error>;
+    async fn update_old_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error>;
 
     /// Updates the new frame.
-    async fn update_new_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error>;
+    async fn update_new_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error>;
 
     /// Displays the new frame
     async fn display_new_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error>;

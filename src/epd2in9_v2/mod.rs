@@ -87,16 +87,18 @@ const WS_20_30: [u8; 159] = [
     0x44, 0x44, 0x0, 0x0, 0x0, 0x22, 0x17, 0x41, 0x0, 0x32, 0x36,
 ];
 
-use embedded_hal::digital::{InputPin, OutputPin, ErrorType};
-use embedded_hal_async::{spi::SpiDevice, digital::Wait};
+use core::fmt::Debug;
+use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal_async::{digital::Wait, spi::SpiDevice};
+
+use crate::error::ErrorKind;
+use crate::interface::DisplayInterface;
+use crate::traits::{ErrorType, InternalWiAdditions, QuickRefresh, RefreshLut, WaveshareDisplay};
 
 use crate::type_a::command::Command;
 
-use crate::color::Color;
-use crate::error::ErrorKind;
 use crate::buffer_len;
-use crate::interface::DisplayInterface;
-use crate::traits::{QuickRefresh, RefreshLut, WaveshareDisplay, ErrorType, InternalWiAdditions};
+use crate::color::Color;
 
 /// Display with Fullsize buffer for use with the 2in9 EPD V2
 #[cfg(feature = "graphics")]
@@ -119,7 +121,8 @@ pub struct Epd2in9<SPI, BUSY, DC, RST> {
     refresh: RefreshLut,
 }
 
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -176,22 +179,25 @@ where
         self.wait_until_idle(spi).await?;
 
         // set LUT by host
-        self.set_lut_helper(spi, delay, &WS_20_30[0..153]).await?;
+        self.set_lut_helper(spi, &WS_20_30[0..153]).await?;
         self.interface
-            .cmd_with_data(spi, Command::WriteLutRegisterEnd, &WS_20_30[153..154]).await?;
+            .cmd_with_data(spi, Command::WriteLutRegisterEnd, &WS_20_30[153..154])
+            .await?;
         self.interface
-            .cmd_with_data(spi, Command::GateDrivingVoltage, &WS_20_30[154..155]).await?;
+            .cmd_with_data(spi, Command::GateDrivingVoltage, &WS_20_30[154..155])
+            .await?;
         self.interface
-            .cmd_with_data(spi, Command::SourceDrivingVoltage, &WS_20_30[155..158]).await?;
+            .cmd_with_data(spi, Command::SourceDrivingVoltage, &WS_20_30[155..158])
+            .await?;
         self.interface
-            .cmd_with_data(spi, Command::WriteVcomRegister, &WS_20_30[158..159]).await?;
+            .cmd_with_data(spi, Command::WriteVcomRegister, &WS_20_30[158..159])
+            .await?;
 
         Ok(())
     }
 }
 
-impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
-    for Epd2in9<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -245,11 +251,7 @@ where
         Ok(())
     }
 
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error> {
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.interface
             .cmd_with_data(spi, Command::WriteRam, buffer)
@@ -281,7 +283,8 @@ where
         self.wait_until_idle(spi).await?;
         // Enable clock signal, Enable Analog, Load temperature value, DISPLAY with DISPLAY Mode 1, Disable Analog, Disable OSC
         self.interface
-            .cmd_with_data(spi, Command::DisplayUpdateControl2, &[0xC7]).await?;
+            .cmd_with_data(spi, Command::DisplayUpdateControl2, &[0xC7])
+            .await?;
         self.interface.cmd(spi, Command::MasterActivation).await?;
         self.wait_until_idle(spi).await?;
         Ok(())
@@ -332,10 +335,7 @@ where
         Ok(())
     }
 
-    async fn wait_until_idle(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), Self::Error> {
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }
@@ -434,8 +434,7 @@ where
     }
 }
 
-impl<SPI, BUSY, DC, RST> QuickRefresh<SPI, BUSY, DC, RST>
-    for Epd2in9<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> QuickRefresh<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -447,11 +446,7 @@ where
     RST::Error: Copy + Debug,
 {
     /// To be followed immediately by `update_new_frame`.
-    async fn update_old_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error> {
+    async fn update_old_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.interface
             .cmd_with_data(spi, Command::WriteRam2, buffer)
@@ -459,11 +454,7 @@ where
     }
 
     /// To be used immediately after `update_old_frame`.
-    async fn update_new_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error> {
+    async fn update_new_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.interface.reset(spi, 10_000, 2_000).await?;
 
@@ -494,10 +485,7 @@ where
     }
 
     /// For a quick refresh of the new updated frame. To be used immediately after `update_new_frame`
-    async fn display_new_frame(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), Self::Error> {
+    async fn display_new_frame(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.interface
             .cmd_with_data(spi, Command::DisplayUpdateControl2, &[0x0F])

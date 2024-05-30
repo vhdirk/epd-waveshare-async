@@ -54,14 +54,17 @@ use core::fmt::Debug;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::{digital::Wait, spi::SpiDevice};
 
-use crate::{type_a::{
-    command::Command,
-    constants::{LUT_FULL_UPDATE, LUT_PARTIAL_UPDATE},
-}, traits::{RefreshLut, WaveshareDisplay, InternalWiAdditions, ErrorType}};
+use crate::{
+    traits::{ErrorType, InternalWiAdditions, RefreshLut, WaveshareDisplay},
+    type_a::{
+        command::Command,
+        constants::{LUT_FULL_UPDATE, LUT_PARTIAL_UPDATE},
+    },
+};
 
+use crate::buffer_len;
 use crate::color::Color;
 use crate::error::ErrorKind;
-use crate::buffer_len;
 use crate::interface::DisplayInterface;
 
 /// Display with Fullsize buffer for use with the 2in9 EPD
@@ -85,7 +88,8 @@ pub struct Epd2in9<SPI, BUSY, DC, RST> {
     refresh: RefreshLut,
 }
 
-impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>where
+impl<SPI, BUSY, DC, RST> ErrorType<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>
+where
     SPI: SpiDevice,
     SPI::Error: Copy,
     BUSY: InputPin + Wait,
@@ -157,8 +161,7 @@ where
     }
 }
 
-impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST>
-    for Epd2in9<SPI, BUSY, DC, RST>
+impl<SPI, BUSY, DC, RST> WaveshareDisplay<SPI, BUSY, DC, RST> for Epd2in9<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
     SPI::Error: Copy,
@@ -214,11 +217,7 @@ where
         Ok(())
     }
 
-    async fn update_frame(
-        &mut self,
-        spi: &mut SPI,
-        buffer: &[u8],
-    ) -> Result<(), Self::Error> {
+    async fn update_frame(&mut self, spi: &mut SPI, buffer: &[u8]) -> Result<(), Self::Error> {
         self.wait_until_idle(spi).await?;
         self.use_full_frame(spi).await?;
 
@@ -309,10 +308,7 @@ where
         }
     }
 
-    async fn wait_until_idle(
-        &mut self,
-        spi: &mut SPI,
-    ) -> Result<(), Self::Error> {
+    async fn wait_until_idle(&mut self, spi: &mut SPI) -> Result<(), Self::Error> {
         self.interface.wait_until_idle(spi, IS_BUSY_LOW).await
     }
 }

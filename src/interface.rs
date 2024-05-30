@@ -69,7 +69,11 @@ where
     /// Basic function for sending an array of u8-values of data over spi
     ///
     /// Enables direct interaction with the device with the help of [command()](Epd4in2::command())
-    pub(crate) async fn data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    pub(crate) async fn data(
+        &mut self,
+        spi: &mut SPI,
+        data: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         // high for data
         self.dc.set_high().map_err(ErrorKind::DcError)?;
 
@@ -117,7 +121,11 @@ where
     }
 
     // spi write helper/abstraction function
-    async fn write(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn write(
+        &mut self,
+        spi: &mut SPI,
+        data: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         // transfer spi data
         // Be careful!! Linux has a default limit of 4096 bytes per spi transfer
         // see https://raspberrypi.stackexchange.com/questions/65595/spi-transfer-fails-with-buffer-size-greater-than-4096
@@ -149,7 +157,10 @@ where
         is_busy_low: bool,
     ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         if is_busy_low {
-            self.busy.wait_for_high().await.map_err(ErrorKind::BusyError)
+            self.busy
+                .wait_for_high()
+                .await
+                .map_err(ErrorKind::BusyError)
         } else {
             self.busy.wait_for_low().await.map_err(ErrorKind::BusyError)
         }
@@ -172,8 +183,14 @@ where
         Ok(())
     }
 
-    pub(crate) async fn delay(&mut self, spi: &mut SPI, duration: u32) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
-        spi.transaction(&mut [Operation::DelayUs(duration)]).await.map_err(ErrorKind::SpiError)
+    pub(crate) async fn delay(
+        &mut self,
+        spi: &mut SPI,
+        duration: u32,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+        spi.transaction(&mut [Operation::DelayNs(duration * 1000)])
+            .await
+            .map_err(ErrorKind::SpiError)
     }
 
     /// Checks if device is still busy
@@ -201,7 +218,12 @@ where
     /// The timing of keeping the reset pin low seems to be important and different per device.
     /// Most displays seem to require keeping it low for 10ms, but the 7in5_v2 only seems to reset
     /// properly with 2ms
-    pub(crate) async fn reset(&mut self, spi: &mut SPI, initial_delay: u32, duration: u32) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    pub(crate) async fn reset(
+        &mut self,
+        spi: &mut SPI,
+        initial_delay: u32,
+        duration: u32,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.rst.set_high().map_err(ErrorKind::RstError)?;
         self.delay(spi, initial_delay).await?;
 

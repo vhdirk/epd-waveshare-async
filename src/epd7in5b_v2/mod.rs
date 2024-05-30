@@ -18,7 +18,7 @@ use crate::color::TriColor;
 use crate::error::ErrorKind;
 use crate::interface::DisplayInterface;
 use crate::traits::{
-    InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay, ErrorType,
+    ErrorType, InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay,
 };
 
 pub(crate) mod command;
@@ -200,7 +200,7 @@ where
         rst: RST,
         delay_us: Option<u32>,
     ) -> Result<Self, Self::Error> {
-        let interface = DisplayInterface::new(busy, dc, rst);
+        let interface = DisplayInterface::new(busy, dc, rst, delay_us);
         let color = DEFAULT_BACKGROUND_COLOR;
 
         let mut epd = Epd7in5 { interface, color };
@@ -228,25 +228,27 @@ where
             spi,
             Command::DataStartTransmission1,
             &buffer[..NUM_DISPLAY_BITS],
-        ).await?;
+        )
+        .await?;
         self.cmd_with_data(
             spi,
             Command::DataStartTransmission2,
             &buffer[NUM_DISPLAY_BITS..],
-        ).await?;
+        )
+        .await?;
         self.interface.cmd(spi, Command::DataStop).await?;
         Ok(())
     }
 
     async fn update_partial_frame(
         &mut self,
-        spi: &mut SPI,
+        _spi: &mut SPI,
         _buffer: &[u8],
         _x: u32,
         _y: u32,
         _width: u32,
         _height: u32,
-    ) -> Result<(), SPI::Error> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -269,10 +271,14 @@ where
         self.send_resolution(spi).await?;
 
         self.command(spi, Command::DataStartTransmission1).await?;
-        self.interface.data_x_times(spi, 0xFF, WIDTH / 8 * HEIGHT).await?;
+        self.interface
+            .data_x_times(spi, 0xFF, WIDTH / 8 * HEIGHT)
+            .await?;
 
         self.command(spi, Command::DataStartTransmission2).await?;
-        self.interface.data_x_times(spi, 0x00, WIDTH / 8 * HEIGHT).await?;
+        self.interface
+            .data_x_times(spi, 0x00, WIDTH / 8 * HEIGHT)
+            .await?;
 
         self.interface.cmd(spi, Command::DataStop).await?;
 
@@ -381,7 +387,11 @@ where
         self.interface.cmd(spi, command).await
     }
 
-    async fn send_data(&mut self, spi: &mut SPI, data: &[u8]) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn send_data(
+        &mut self,
+        spi: &mut SPI,
+        data: &[u8],
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         self.interface.data(spi, data).await
     }
 
@@ -394,7 +404,10 @@ where
         self.interface.cmd_with_data(spi, command, data).await
     }
 
-    async fn send_resolution(&mut self, spi: &mut SPI) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
+    async fn send_resolution(
+        &mut self,
+        spi: &mut SPI,
+    ) -> Result<(), ErrorKind<SPI, BUSY, DC, RST>> {
         let w = self.width();
         let h = self.height();
 

@@ -7,6 +7,8 @@ use embedded_graphics::{
     text::{Baseline, Text, TextStyleBuilder},
 };
 use embedded_hal::delay::DelayNs;
+use embedded_hal::spi::ErrorType;
+use embedded_hal_bus::spi::ExclusiveDevice;
 use epd_waveshare::{
     color::*,
     epd4in2::{Display4in2, Epd4in2},
@@ -30,39 +32,43 @@ fn main() -> Result<(), SPIError> {
     let options = SpidevOptions::new()
         .bits_per_word(8)
         .max_speed_hz(4_000_000)
-        .mode(spidev::SpiModeFlags::SPI_MODE_0)
+        .mode(SpiModeFlags::SPI_MODE_0)
         .build();
     spi.configure(&options).expect("spi configuration");
 
+    let mut chip = Chip::new("/dev/gpiochip0")?;
+    let handle = chip
+        .get_line(4)?
+        .request(LineRequestFlags::INPUT, 0, "read-input")?;
+
     // Configure Digital I/O Pin to be used as Chip Select for SPI
-    let cs = SysfsPin::new(26); //BCM7 CE0
+    let cs = CdevPin::new_output(26); //BCM7 CE0
     cs.export().expect("cs export");
     while !cs.is_exported() {}
-    cs.set_direction(Direction::Out).expect("CS Direction");
     cs.set_value(1).expect("CS Value set to 1");
 
-    let busy = SysfsPin::new(5); //pin 29
+    let busy = CdevPin::new_input(5); //pin 29
     busy.export().expect("busy export");
     while !busy.is_exported() {}
-    busy.set_direction(Direction::In).expect("busy Direction");
     //busy.set_value(1).expect("busy Value set to 1");
 
-    let dc = SysfsPin::new(6); //pin 31 //bcm6
+    let dc = CdevPin::new_output(6); //pin 31 //bcm6
     dc.export().expect("dc export");
     while !dc.is_exported() {}
-    dc.set_direction(Direction::Out).expect("dc Direction");
     dc.set_value(1).expect("dc Value set to 1");
 
-    let rst = SysfsPin::new(16); //pin 36 //bcm16
+    let rst = CdevPin::new_output(16); //pin 36 //bcm16
     rst.export().expect("rst export");
     while !rst.is_exported() {}
-    rst.set_direction(Direction::Out).expect("rst Direction");
     rst.set_value(1).expect("rst Value set to 1");
 
     let mut delay = Delay {};
 
+    let mut spi_device =
+        ExclusiveDevice::new(spi, cs, embassy_time::Delay {}).expect("ExclusiveDevice");
+
     let mut epd4in2 =
-        Epd4in2::new(&mut spi, busy, dc, rst, None).expect("eink initalize error");
+        Epd4in2::new(&mut spi_device, busy, dc, rst, None).expect("eink initalize error");
 
     println!("Test all the rotations");
     let mut display = Display4in2::default();
