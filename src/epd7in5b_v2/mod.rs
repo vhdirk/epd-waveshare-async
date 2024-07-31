@@ -305,7 +305,7 @@ where
 
     async fn set_lut(
         &mut self,
-        spi: &mut SPI,
+        _spi: &mut SPI,
         _refresh_rate: Option<RefreshLut>,
     ) -> Result<(), Self::Error> {
         unimplemented!();

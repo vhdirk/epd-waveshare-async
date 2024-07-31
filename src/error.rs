@@ -10,9 +10,13 @@ use crate::traits::Error;
 pub enum ErrorKind<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin,
+    BUSY::Error: Copy,
     DC: OutputPin,
+    DC::Error: Copy,
     RST: OutputPin,
+    RST::Error: Copy,
 {
     /// Encountered an SPI error
     SpiError(SPI::Error),
@@ -62,9 +66,13 @@ where
 impl<SPI, BUSY, DC, RST> Display for ErrorKind<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin,
+    BUSY::Error: Copy,
     DC: OutputPin,
+    DC::Error: Copy,
     RST: OutputPin,
+    RST::Error: Copy,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -83,9 +91,13 @@ where
 impl<SPI, BUSY, DC, RST> Debug for ErrorKind<SPI, BUSY, DC, RST>
 where
     SPI: SpiDevice,
+    SPI::Error: Copy,
     BUSY: InputPin,
+    BUSY::Error: Copy,
     DC: OutputPin,
+    DC::Error: Copy,
     RST: OutputPin,
+    RST::Error: Copy,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
